@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- tyre-smoke swooshes -->
+    <path android:fillColor="#00000000" android:strokeColor="#1A0D05" android:strokeWidth="2.6"
+        android:strokeLineCap="round" android:strokeAlpha="0.55"
+        android:pathData="M22,70 Q30,64 40,66 M20,62 Q27,57 36,59" />
+    <!-- car body, slightly rotated as if drifting -->
+    <group android:pivotX="54" android:pivotY="58" android:rotation="-10">
+        <path android:fillColor="#1A0D05"
+            android:pathData="M32,62 L35,54 L46,51 L53,44 L67,44 L74,51 L81,53 L84,62 Z" />
+        <path android:fillColor="#FFE2C4"
+            android:pathData="M55,46 L65,46 L70,51 L50,51 Z" />
+        <path android:fillColor="#1A0D05" android:pathData="M42,62 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+        <path android:fillColor="#1A0D05" android:pathData="M74,62 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+        <path android:fillColor="#FFB13D" android:pathData="M42,62 m-2.4,0 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0" />
+        <path android:fillColor="#FFB13D" android:pathData="M74,62 m-2.4,0 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0" />
+    </group>
+</vector>
