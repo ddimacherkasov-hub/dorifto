@@ -424,6 +424,54 @@ function bindBtn(id, key) {
 bindBtn('bL', 'left'); bindBtn('bR', 'right'); bindBtn('bGas', 'gas'); bindBtn('bBrake', 'brake'); bindBtn('bHand', 'hand');
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
+// analog steering: 0 = buttons, 1 = slide pad, 2 = tilt
+let steerMode = store.get('steerMode', 1);
+input.analog = null;
+const MODES = ['Кнопки', 'Свайп', 'Нахил'];
+{
+  const pad = $('pad'), knob = $('padKnob');
+  let pid = null, x0 = 0;
+  const RANGE = 95; // px of finger travel for full lock
+  const setKnob = (v) => { knob.style.left = (50 + v * 50) + '%'; };
+  pad.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); pid = e.pointerId; x0 = e.clientX; input.analog = 0; setKnob(0);
+    try { pad.setPointerCapture(pid); } catch {}
+  });
+  pad.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== pid) return;
+    let v = clamp((e.clientX - x0) / RANGE, -1, 1);
+    // let the anchor follow if the finger goes past full lock, so coming back responds at once
+    if (Math.abs(e.clientX - x0) > RANGE) x0 = e.clientX - Math.sign(v) * RANGE;
+    input.analog = v; setKnob(v);
+  });
+  const up = (e) => { if (e.pointerId !== pid) return; pid = null; input.analog = 0; setKnob(0); };
+  pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up); pad.addEventListener('lostpointercapture', up);
+  input._setKnob = setKnob;
+}
+window.addEventListener('devicemotion', (e) => {
+  if (steerMode !== 2) return;
+  const g = e.accelerationIncludingGravity; if (!g || g.x == null) return;
+  const ang = ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * Math.PI / 180;
+  const right = g.x * Math.cos(ang) - g.y * Math.sin(ang);
+  const up = g.x * Math.sin(ang) + g.y * Math.cos(ang);
+  let wheel = Math.atan2(-right, Math.abs(up) + 0.5);  // like turning a steering wheel
+  const DEAD = 0.04, FULL = 0.42;                     // full lock at ~24° of tilt
+  wheel = Math.sign(wheel) * Math.max(0, Math.abs(wheel) - DEAD) / (FULL - DEAD);
+  input.analog = clamp(wheel, -1, 1);
+  if (input._setKnob) input._setKnob(input.analog);
+});
+function applySteerMode() {
+  const btns = steerMode === 0;
+  $('bL').classList.toggle('hidden', !btns);
+  $('bR').classList.toggle('hidden', !btns);
+  $('pad').classList.toggle('hidden', btns);
+  $('pad').style.pointerEvents = steerMode === 1 ? 'auto' : 'none';
+  $('padHint').textContent = steerMode === 1 ? 'тягни пальцем вліво / вправо' : 'нахиляй телефон як кермо';
+  input.analog = btns ? null : 0;
+  if (input._setKnob) input._setKnob(0);
+}
+applySteerMode();
+
 // ---------- audio ----------
 let audio = null;
 function initAudio() {
@@ -498,9 +546,13 @@ function physics(dt) {
   const speed = Math.hypot(vF, vL);
 
   // steering input smoothing
-  const target = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-  const rate = target === 0 ? 7 : (Math.sign(target) !== Math.sign(S.steer) ? 9 : 4.5);
-  S.steer += clamp(target - S.steer, -rate * dt, rate * dt);
+  if (steerMode === 0 || input.analog == null) {
+    const target = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const rate = S.drifting ? 4 : (target === 0 ? 8 : (Math.sign(target) !== Math.sign(S.steer) ? 10 : 6));
+    S.steer += clamp(target - S.steer, -rate * dt, rate * dt);
+  } else {
+    S.steer += (input.analog - S.steer) * Math.min(1, 18 * dt);
+  }
 
   // surface
   const near = nearestIdx(S.x, S.z, S.idx);
@@ -557,7 +609,7 @@ function physics(dt) {
   const newVL = vL * Math.exp(-grip * dt);
   const lost = Math.abs(vL - newVL);
   vL = newVL;
-  if (S.drifting && vF > 0) vF += lost * (input.gas ? 0.6 : 0.25); // momentum carried through the slide
+  if (S.drifting && vF > 0) vF += lost * (input.gas ? 0.72 : 0.5); // momentum carried through the slide
 
   // yaw
   const vh = Math.atan2(S.vx, S.vz);
@@ -572,13 +624,16 @@ function physics(dt) {
     targetAV = clamp(targetAV, -lim, lim);
     resp = 12;
   } else {
-    // steering sets the drift angle: into the turn = deeper, counter-steer = shallower
-    const into = -S.steer * S.driftDir;
-    let want = input.gas ? 0.62 + 0.38 * into : 0.12 + 0.25 * into;
-    if (input.hand) want += 0.35;
-    want = clamp(want, 0.05, 1.15) * S.driftDir;
-    targetAV = clamp(velTurn, -3, 3) + (want - slip) * 4.2;
-    resp = 9;
+    // Steering rotates the car directly (relative to where it is travelling).
+    // Throttle slowly pushes the angle wider, lifting lets it close.
+    // So to HOLD an angle you balance gas against counter-steer – like a real drift.
+    const D = S.driftDir, a = slip * D;            // current angle on the drift side, rad
+    let rel = -S.steer * 2.1;                      // direct steering
+    rel += D * (input.gas ? 0.55 : -0.9);          // throttle opens, lift closes
+    if (input.hand) rel += D * 1.4;
+    if (a > 1.05) rel -= D * (a - 1.05) * 9;       // soft limit ~60°, no full spin
+    targetAV = clamp(velTurn, -3, 3) + rel;
+    resp = 10;
   }
   S.av += (targetAV - S.av) * Math.min(1, resp * dt);
   if (speed < 0.5 && !input.gas) S.av *= 0.8;
@@ -751,6 +806,9 @@ function updateHUD() {
     const left = 1 - G.idle / 1.1;
     c.style.filter = `brightness(${0.6 + left * 0.4})`;
   } else c.style.opacity = 0;
+  const an = $('angle');
+  if (S.drifting && S.speed > 6) { an.style.opacity = 1; an.textContent = 'кут ' + Math.round(Math.abs(S.slip) * 57.3) + '°'; }
+  else an.style.opacity = 0;
 }
 
 // ---------- menu ----------
@@ -762,6 +820,14 @@ function buildMenu() {
     d.style.background = '#' + col.toString(16).padStart(6, '0');
     d.addEventListener('pointerdown', () => { carColor = i; store.set('color', i); carPaint.color.setHex(col); buildMenu(); });
     wrap.appendChild(d);
+  });
+  const mw = $('modes'); mw.innerHTML = '';
+  MODES.forEach((name, i) => {
+    const d = document.createElement('div');
+    d.className = 'mode' + (i === steerMode ? ' sel' : '');
+    d.textContent = name;
+    d.addEventListener('pointerdown', () => { steerMode = i; store.set('steerMode', i); applySteerMode(); buildMenu(); });
+    mw.appendChild(d);
   });
   $('stats').innerHTML = `Рекорд очок: <b>${G.best.toLocaleString('uk-UA')}</b> · Найкращий дрифт: <b>${G.bestCombo.toLocaleString('uk-UA')}</b> · Найшвидше коло: <b>${fmtTime(G.bestLap)}</b>`;
   $('play').textContent = G.started ? 'ПРОДОВЖИТИ' : 'ГРАТИ';

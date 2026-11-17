@@ -47,6 +47,15 @@
   .stats { margin-top: 16px; font-size: 13px; opacity: .75; line-height: 1.6; }
   .hint { margin-top: 10px; font-size: 12px; opacity: .5; }
   .hidden { display: none !important; }
+  #pad { position: absolute; pointer-events: auto; left: 0; bottom: 0; width: 46%; height: 62%; touch-action: none; }
+  #padBar { position: absolute; left: max(30px, env(safe-area-inset-left)); bottom: 40px; width: 230px; height: 14px; border-radius: 7px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); pointer-events: none; }
+  #padKnob { position: absolute; top: 50%; left: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(255,255,255,.35); border: 2px solid rgba(255,255,255,.7); }
+  #padHint { position: absolute; left: 0; right: 0; top: -26px; text-align: center; font-size: 11px; opacity: .55; }
+  #angle { margin-top: 2px; font-size: 14px; font-weight: 700; color: #fff; opacity: 0; transition: opacity .2s; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+  .modes { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+  .mode { padding: 8px 14px; border-radius: 12px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); font-size: 14px; font-weight: 700; }
+  .mode.sel { background: rgba(255,177,61,.25); border-color: #ffb13d; color: #ffd23f; }
+  .mlbl { font-size: 12px; opacity: .6; margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -58,11 +67,13 @@
   <div id="center">
     <div id="total">0</div>
     <div id="combo"><span id="comboPts">0</span><small id="comboMul">x1</small></div>
+    <div id="angle">0°</div>
   </div>
   <div id="msg"></div>
 </div>
 
 <div id="controls" class="hidden">
+  <div id="pad"><div id="padBar"><div id="padHint">тягни пальцем вліво / вправо</div><div id="padKnob"></div></div></div>
   <div class="btn" id="bL">◀</div>
   <div class="btn" id="bR">▶</div>
   <div class="btn" id="bBrake">ГАЛЬМО</div>
@@ -78,9 +89,11 @@
     <div class="logo">DORIFTO</div>
     <div class="sub">Дрифт-аркада: тримай занос, збирай очки</div>
     <div class="colors" id="colors"></div>
+    <div class="mlbl">Кермо</div>
+    <div class="modes" id="modes"></div>
     <button class="play" id="play">ГРАТИ</button>
     <div class="stats" id="stats"></div>
-    <div class="hint">Занос: ручник або різкий поворот на газу. Під час дрифту: кнопка в бік повороту — кут більший, протилежна — рівніше. Відпусти газ — вийдеш із заносу.</div>
+    <div class="hint">Занос: ручник або різкий поворот на газу. У заносі газ сам розкриває кут — тримай його контррульовим. Кермо в бік повороту — кут більший, протилежне — менший. Відпусти газ — вийдеш із заносу.</div>
   </div>
 </div>
 <script src="game.js"></script>
